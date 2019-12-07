@@ -1,6 +1,6 @@
 open System.IO
 
-let parseFuelAmounts (amounts: string array) =
+let parseModuleFuelAmounts (amounts: string array) =
     let tryParseFloat (str: string) =
         try
             Some(float <| str.Trim())
@@ -10,7 +10,7 @@ let parseFuelAmounts (amounts: string array) =
     |> Array.toList
     |> List.choose tryParseFloat
 
-let calculateFuelRequirements (amounts: float list) =
+let calculateModuleFuelRequirements (amounts: float list) =
     let flip f x y = f y x
 
     amounts
@@ -19,11 +19,11 @@ let calculateFuelRequirements (amounts: float list) =
         |> floor
         |> flip (-) 2.)
 
-let getFuelRequirements = parseFuelAmounts >> calculateFuelRequirements
+let getModuleFuelRequirements = parseModuleFuelAmounts >> calculateModuleFuelRequirements
 
 let fuelAmounts =
     sprintf "%s\\fuel.txt" __SOURCE_DIRECTORY__
     |> File.ReadAllLines
-    |> getFuelRequirements
+    |> getModuleFuelRequirements
     |> int
  
