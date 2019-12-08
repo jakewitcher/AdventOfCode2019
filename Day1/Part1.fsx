@@ -1,5 +1,7 @@
 open System.IO
 
+let flip f x y = f y x
+
 let parseModuleFuelAmounts (amounts: string array) =
     let tryParseFloat (str: string) =
         try
@@ -11,8 +13,6 @@ let parseModuleFuelAmounts (amounts: string array) =
     |> List.choose tryParseFloat
 
 let calculateModuleFuelRequirements (amounts: float list) =
-    let flip f x y = f y x
-
     amounts
     |> List.sumBy (fun amount ->
         amount / 3.
