@@ -91,19 +91,15 @@ let findIntersection (wire1: WireMarker * WireMarker) (wire2: WireMarker * WireM
 let findAllIntersections (wire1: seq<WireMarker * WireMarker>) (wire2: seq<WireMarker * WireMarker>) =
     wire1 |> Seq.collect (fun wire1' -> Seq.choose (fun wire2' -> findIntersection wire1' wire2') wire2)
 
-let closestIntersection =
-    let file = sprintf "%s\\wires.txt" __SOURCE_DIRECTORY__ |> File.ReadAllLines
-
-    let wireLines =
-        file
-        |> Array.map
-            (parseWires
-             >> recordPoints
-             >> List.rev
-             >> Seq.windowed 2
-             >> Seq.map (fun arr -> (arr.[0], arr.[1])))
-
-    wireLines
+let shortestLengthntersection =
+    sprintf "%s\\wires.txt" __SOURCE_DIRECTORY__
+    |> File.ReadAllLines
+    |> Array.map
+        (parseWires
+         >> recordPoints
+         >> List.rev
+         >> Seq.windowed 2
+         >> Seq.map (fun arr -> (arr.[0], arr.[1])))
     |> (fun arr -> findAllIntersections arr.[0] arr.[1])
     |> Seq.map (fun wireMarker -> wireMarker.Length)
     |> Seq.min
