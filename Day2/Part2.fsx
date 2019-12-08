@@ -61,10 +61,10 @@ module Op =
 module IntCodeProgram =
     let parse (file: string) = file.Split [| ',' |] |> Array.choose tryParseInt
 
-    let restore (program: int []) =
+    let initialize (noun: int) (verb: int) (program: int []) =
         program
-        |> Array.updateAt 1 12
-        |> Array.updateAt 2 2
+        |> Array.updateAt 1 noun
+        |> Array.updateAt 2 verb
 
     let run (program: int []) =
         let rec run (i: int, prog: int [] option) =
@@ -76,10 +76,34 @@ module IntCodeProgram =
 
         run (0, Some program)
 
-    let output =
+    let initialState =
         sprintf "%s\\program.txt" __SOURCE_DIRECTORY__
         |> File.ReadAllText
         |> parse
-        |> restore
+
+module GravityAssist =
+    open IntCodeProgram
+
+    let run (noun: int) (verb: int) =
+        initialState
+        |> initialize noun verb
         |> run
         |> Option.map Array.head
+
+    let findNounVerb =
+        let inputs =
+            Array.init 100 (fun _ -> [| 0 .. 99 |])
+            |> Array.mapi (fun first inputs' -> Array.map (fun second -> (first, second)) inputs')
+            |> Array.concat
+
+        let rec findNounVerb' program =
+            match program with
+            | [] -> None
+            | (noun, verb) :: _ when run noun verb = Some 19690720 -> Some(noun, verb)
+            | _ :: tail -> findNounVerb' tail
+
+        List.ofArray inputs
+        |> findNounVerb'
+        |> Option.map (fun (noun, verb) -> 100 * noun + verb)
+
+        
