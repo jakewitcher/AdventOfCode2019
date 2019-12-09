@@ -111,15 +111,17 @@ module Intersections =
         |> Seq.min
 
 module FuelManagementSystem =
+    let convertDirectionsToLines =
+        Direction.tryParseAll
+        >> Point.ofDirection
+        >> List.rev
+        >> Seq.windowed 2
+        >> Seq.map (fun points -> Line.create points.[0] points.[1])
+
     let wire1, wire2 =
         sprintf "%s\\wires.txt" __SOURCE_DIRECTORY__
         |> File.ReadAllLines
-        |> Array.map
-            (Direction.tryParseAll
-             >> Point.ofDirection
-             >> List.rev
-             >> Seq.windowed 2
-             >> Seq.map (fun points -> Line.create points.[0] points.[1]))
+        |> Array.map (convertDirectionsToLines)
         |> (fun wires -> wires.[0], wires.[1])
 
     let closestIntersection = Intersections.findClosest wire1 wire2

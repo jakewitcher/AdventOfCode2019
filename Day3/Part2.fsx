@@ -61,7 +61,7 @@ module Point =
                 newPoint, newPoint :: points
 
         directions
-        |> List.fold createPoint ((0, 0), [])
+        |> List.fold createPoint ((0, 0), [ (0, 0) ])
         |> snd
 
     let distance (pointA: Point) (pointB: Point) =
@@ -123,20 +123,22 @@ module Intersections =
         |> Seq.min
 
 module FuelManagementSystem =
+    let addCurrentWireLengthToLine (state: float * Line list) (line: Line) =
+        (fst state + line.Length, { line with WireLength = line.Length + fst state } :: (snd state))
+
+    let convertDirectionsToLines =
+        Direction.tryParseAll
+        >> Point.ofDirection
+        >> List.rev
+        >> Seq.windowed 2
+        >> Seq.map (fun points -> Line.create points.[0] points.[1])
+        >> Seq.fold addCurrentWireLengthToLine (0., [])
+        >> snd
+
     let wire1, wire2 =
         sprintf "%s\\wires.txt" __SOURCE_DIRECTORY__
         |> File.ReadAllLines
-        |> Array.map
-            (Direction.tryParseAll
-             >> Point.ofDirection
-             >> List.rev
-             >> Seq.windowed 2
-             >> Seq.map (fun points -> Line.create points.[0] points.[1])
-             >> Seq.fold
-                 (fun state line ->
-                 (fst state + line.Length, { line with WireLength = line.Length + fst state } :: (snd state))) (0., [])
-             >> snd
-             >> List.rev)
+        |> Array.map (convertDirectionsToLines)
         |> (fun wires -> wires.[0], wires.[1])
 
     let shortestDistanceIntersection = Intersections.findShortestDistance wire1 wire2
