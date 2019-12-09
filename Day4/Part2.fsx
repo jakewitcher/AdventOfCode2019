@@ -1,5 +1,3 @@
-let passwordRange = [ 273025 .. 767253 ]
-
 module Password =
     let toDigitList (password: int) =
         let rec toDigitList' password digits =
@@ -51,6 +49,8 @@ module Password =
         |> List.filter (function
             | Ok password -> true
             | Error _ -> false)
+
+let passwordRange = [ 273025 .. 767253 ]
 
 let totalValidPasswords =
     passwordRange
