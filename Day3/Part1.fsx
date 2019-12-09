@@ -5,7 +5,12 @@ let tryParseInt (str: string) =
         Some(int <| str.Trim())
     with _ -> None
 
-type Point = Point of x: int * y: int
+type Point = int * int
+
+type Line =
+    { PointA: Point
+      PointB: Point
+      Length: float }
 
 type Direction =
     | Up of int
@@ -13,8 +18,8 @@ type Direction =
     | Left of int
     | Right of int
 
-module WirePath =
-    let parseDirection (direction: string) =
+module Direction =
+    let tryParse (direction: string) =
         let parse (str: string) (ctor: int -> Direction) =
             str.Substring(1)
             |> tryParseInt
@@ -27,57 +32,94 @@ module WirePath =
         | "R" -> parse direction Right
         | _ -> None
 
-    let recordPoints (directions: Direction list) =
-        let createPoint (Point(x, y), points) direction =
+    let tryParseAll (file: string) =
+        file.Split [| ',' |]
+        |> Array.choose tryParse
+        |> List.ofArray
+
+module Point =
+    let ofDirection (directions: Direction list): Point list =
+        let createPoint ((x, y), points) direction =
             match direction with
             | Up a ->
-                let newPoint = Point(x, y + a)
+                let newPoint = (x, y + a)
                 newPoint, newPoint :: points
             | Down b ->
-                let newPoint = Point(x, y - b)
+                let newPoint = (x, y - b)
                 newPoint, newPoint :: points
             | Left c ->
-                let newPoint = Point(x - c, y)
+                let newPoint = (x - c, y)
                 newPoint, newPoint :: points
             | Right d ->
-                let newPoint = Point(x + d, y)
+                let newPoint = (x + d, y)
                 newPoint, newPoint :: points
 
         directions
-        |> List.fold createPoint (Point(0, 0), [])
+        |> List.fold createPoint ((0, 0), [])
         |> snd
 
-    let parse (file: string) =
-        file.Split [| ',' |]
-        |> Array.choose parseDirection
-        |> List.ofArray
+    let distance (pointA: Point) (pointB: Point) =
+        pown (fst pointA - fst pointB) 2 + pown (snd pointA - snd pointB) 2
+        |> float
+        |> sqrt
 
-module Intersection =
-    open WirePath
+module Line =
+    let create (pointA: Point) (pointB: Point) =
+        let length = Point.distance pointA pointB
+        { PointA = pointA
+          PointB = pointB
+          Length = length }
 
-    let find (wire1: Point * Point) (wire2: Point * Point) =
-        match wire1, wire2 with
-        | (Point(a, b), Point(c, d)), (Point(a', b'), Point(c', d')) when a = c && b' = d' ->
-            if (a >= a' && a <= c' || a <= a' && a >= c') && (b' >= b && b' <= d || b' <= b && b' >= d) then
-                Point(a, b') |> Some
-            else None
-        | (Point(a, b), Point(c, d)), (Point(a', b'), Point(c', d')) when a' = c' && b = d ->
-            if (a' >= a && a' <= c || a' <= a && a' >= c) && (b >= b' && b <= d' || b <= b' && b >= d') then
-                Point(a', b) |> Some
-            else None
+    let isHorizontal (line: Line) =
+        let _, y = line.PointA
+        let _, y' = line.PointB
+
+        line.Length <> 0. && y - y' = 0
+
+    let isVertical (line: Line) =
+        let x, _ = line.PointA
+        let x', _ = line.PointB
+
+        line.Length <> 0. && x - x' = 0
+
+    let private tryFindIntersection (horizontal: Line) (vertical: Line) =
+        let isBetween (a: int) (b: int) (c: int) = c < max a b && c > min a b
+
+        let vxa, vya = vertical.PointA
+        let vxb, vyb = vertical.PointB
+        let hxa, hya = horizontal.PointA
+        let hxb, hyb = horizontal.PointB
+
+        if (isBetween hxa hxb vxa) && (isBetween vya vyb hya) then (vxa, hya) |> Some
+        else None
+
+
+    let intersection (line1: Line) (line2: Line): Point option =
+        match isHorizontal line1, isVertical line2 with
+        | true, true -> tryFindIntersection line1 line2
+        | false, false -> tryFindIntersection line2 line1
         | _ -> None
 
-    let findAll (wire1: seq<Point * Point>) (wire2: seq<Point * Point>) =
-        wire1 |> Seq.collect (fun wire1' -> Seq.choose (fun wire2' -> find wire1' wire2') wire2)
+module Intersections =
+    let findAll (wire1: seq<Line>) (wire2: seq<Line>) =
+        wire1 |> Seq.collect (fun wire1' -> Seq.choose (fun wire2' -> Line.intersection wire1' wire2') wire2)
 
-    let closestIntersection =
+    let findClosest (wire1: seq<Line>) (wire2: seq<Line>) =
+
+        findAll wire1 wire2
+        |> Seq.map (fun (x, y) -> abs x + abs y)
+        |> Seq.min
+
+module FuelManagementSystem =
+    let wire1, wire2 =
         sprintf "%s\\wires.txt" __SOURCE_DIRECTORY__
         |> File.ReadAllLines
         |> Array.map
-            (parse
-             >> recordPoints
+            (Direction.tryParseAll
+             >> Point.ofDirection
+             >> List.rev
              >> Seq.windowed 2
-             >> Seq.map (fun arr -> (arr.[0], arr.[1])))
-        |> (fun arr -> findAll arr.[0] arr.[1])
-        |> Seq.map (fun (Point(x, y)) -> abs x + abs y)
-        |> Seq.min
+             >> Seq.map (fun points -> Line.create points.[0] points.[1]))
+        |> (fun wires -> wires.[0], wires.[1])
+
+    let closestIntersection = Intersections.findClosest wire1 wire2
