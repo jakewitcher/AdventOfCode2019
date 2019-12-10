@@ -38,6 +38,14 @@ type ProgramState =
       Output: ProgramOutput
       Status: Status }
 
+type IntCodeError =
+    | InvalidParameterMode of string list
+    | InvalidParameter of string
+    | MissingParameters of string
+    | InvalidOpCode of string
+    | MissingOpCode of string
+
+
 module Array =
     let updateAt (index: int) (value: 't) (arr: 't []) =
         arr
@@ -76,27 +84,46 @@ module OpCode =
 
     let private parseMode (mode: int) =
         match mode with
-        | 0 -> Position
-        | 1 -> Immediate
-        | mode -> sprintf "%i is not a valid parameter mode" mode |> failwith
+        | 0 -> Ok Position
+        | 1 -> Ok Immediate
+        | mode -> sprintf "%i is not a valid parameter mode" mode |> Error
 
     let private twoParam (ctor: Input * Input * Output -> OpCode) (instruction: int list) (input1: Parameter)
         (input2: Parameter) (output: Parameter) =
         let instruction' = padFour instruction
 
         let input1' =
-            { InputParameter = input1
-              Mode = parseMode instruction'.[1] }
+            parseMode instruction'.[1]
+            |> Result.map (fun mode ->
+                { InputParameter = input1
+                  Mode = mode })
 
         let input2' =
-            { InputParameter = input2
-              Mode = parseMode instruction'.[0] }
+            parseMode instruction'.[0]
+            |> Result.map (fun mode ->
+                { InputParameter = input2
+                  Mode = mode })
 
         let output' =
             { OutputParameter = output
               Mode = Position }
 
-        ctor (input1', input2', output')
+        match input1', input2' with
+        | Ok in1, Ok in2 -> ctor (in1, in2, output') |> Ok
+        | Error msg, Error msg' ->
+            [ msg; msg' ]
+            |> InvalidParameterMode
+            |> Error
+        | Error msg, _ ->
+            [ msg ]
+            |> InvalidParameterMode
+            |> Error
+        | _, Error msg ->
+            [ msg ]
+            |> InvalidParameterMode
+            |> Error
+
+
 
     let createOne = twoParam One
 
@@ -106,49 +133,75 @@ module OpCode =
         let instruction' = padThree instruction
 
         let input' =
-            { InputParameter = input
-              Mode = parseMode instruction.[0] }
+            parseMode instruction.[0]
+            |> Result.map (fun mode ->
+                { InputParameter = input
+                  Mode = mode })
 
         let output' =
             { OutputParameter = output
               Mode = Position }
 
-        Three(input', output')
+        match input' with
+        | Ok in1 -> Three(in1, output') |> Ok
+        | Error msg ->
+            [ msg ]
+            |> InvalidParameterMode
+            |> Error
 
-    let createFour (instruction: int list) (output: Parameter) =
+
+    let createFour (instruction: int list) (output: Parameter): Result<OpCode, IntCodeError> =
         let instruction' = padThree instruction
 
         let output' =
             { OutputParameter = output
-              Mode = parseMode instruction.[0] }
+              Mode = Position }
 
-        Four output'
+        Four output' |> Ok
 
     let create (instruction: int list) (state: ProgramState) =
         match List.tryLast instruction with
         | Some 1 ->
             Array.trySub state.Program (state.Position + 1) 3
-            |> Option.map (fun param -> createOne instruction param.[0] param.[1] param.[2] |> Ok)
-            |> Option.defaultValue (Error "not enough parameters for opcode one")
+            |> Option.map (fun param -> createOne instruction param.[0] param.[1] param.[2])
+            |> Option.defaultValue
+                ("not enough parameters for opcode one"
+                 |> MissingParameters
+                 |> Error)
 
         | Some 2 ->
             Array.trySub state.Program (state.Position + 1) 3
-            |> Option.map (fun param -> createTwo instruction param.[0] param.[1] param.[2] |> Ok)
-            |> Option.defaultValue (Error "not enough parameters for opcode two")
+            |> Option.map (fun param -> createTwo instruction param.[0] param.[1] param.[2])
+            |> Option.defaultValue
+                ("not enough parameters for opcode two"
+                 |> MissingParameters
+                 |> Error)
 
         | Some 3 ->
             Array.tryGet (state.Position + 1) state.Program
-            |> Option.map (fun param -> createThree instruction state.UserInput param |> Ok)
-            |> Option.defaultValue (Error "no parameter exists for opcode three")
+            |> Option.map (fun param -> createThree instruction state.UserInput param)
+            |> Option.defaultValue
+                ("no parameter exists for opcode three"
+                 |> MissingParameters
+                 |> Error)
 
         | Some 4 ->
             Array.tryGet (state.Position + 1) state.Program
-            |> Option.map (fun param -> createFour instruction param |> Ok)
-            |> Option.defaultValue (Error "no parameter exists for opcode four")
+            |> Option.map (fun param -> createFour instruction param)
+            |> Option.defaultValue
+                ("no parameter exists for opcode four"
+                 |> MissingParameters
+                 |> Error)
 
-        | Some opcode -> sprintf "%i is not a valid opcode" opcode |> Error
+        | Some opcode ->
+            sprintf "%i is not a valid opcode" opcode
+            |> InvalidOpCode
+            |> Error
 
-        | None -> "no opcode found" |> Error
+        | None ->
+            "no opcode found"
+            |> MissingOpCode
+            |> Error
 
     let processInput (input: Input) (program: Program) =
         match input.Mode with
@@ -167,7 +220,10 @@ module OpCode =
                       Position = state.Position + 4
                       Program = Array.updateAt out.OutputParameter (in1' + in2') state.Program }
                 |> Ok
-            | _, _ -> "invalid parameter" |> Error
+            | _, _ ->
+                "invalid parameter"
+                |> InvalidParameter
+                |> Error
 
         | Two(in1, in2, out) ->
             let param1 = processInput in1 state.Program
@@ -179,7 +235,10 @@ module OpCode =
                       Position = state.Position + 4
                       Program = Array.updateAt out.OutputParameter (in1' * in2') state.Program }
                 |> Ok
-            | _, _ -> "invalid parameter" |> Error
+            | _, _ ->
+                "invalid parameter"
+                |> InvalidParameter
+                |> Error
 
         | Three(in1, out) ->
             let input = processInput in1 state.Program
@@ -190,7 +249,10 @@ module OpCode =
                       Position = state.Position + 2
                       Program = Array.updateAt out.OutputParameter input' state.Program }
                 |> Ok
-            | None -> "invalid Parameter" |> Error
+            | None ->
+                "invalid Parameter"
+                |> InvalidParameter
+                |> Error
 
         | Four out ->
             { state with
@@ -203,7 +265,7 @@ module OpCode =
 
 module Opcode =
 
-    let rec private segment (instruction: int) (segments: int list) =
+    let rec segment (instruction: int) (segments: int list) =
         if instruction <= 0 then segments
         else segment (instruction / 10) (instruction % 10 :: segments)
 
@@ -213,7 +275,10 @@ module Opcode =
 
         if (not << List.isEmpty) segmented then
             OpCode.create segmented state |> Result.bind (fun opcode -> OpCode.run opcode state)
-        else Error "no valid opcode was provided"
+        else
+            sprintf "%i is not a valid opcode" state.Program.[state.Position]
+            |> InvalidOpCode
+            |> Error
 
 
 module IntCodeComputer =
@@ -232,7 +297,7 @@ module IntCodeComputer =
               Output = []
               Status = Run }
 
-        let rec run' (state: Result<ProgramState, string>) =
+        let rec run' (state: Result<ProgramState, IntCodeError>) =
             state
             |> Result.bind (fun progState ->
                 if progState.Status = Halt || progState.Position > Array.length progState.Program then state
