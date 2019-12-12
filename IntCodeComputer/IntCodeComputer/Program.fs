@@ -8,7 +8,7 @@ open Helpers
 
 [<EntryPoint>]
 let main argv =
-    Console.WriteLine "Enter Input Instruction: [1] - Air Conditioner Unit "
+    Console.WriteLine "Enter Input Instruction: [1] - Air Conditioner Unit; [5] - Thermal Radiator Controler "
     let input = Console.ReadLine() |> string |> tryParseInt
 
     match input with

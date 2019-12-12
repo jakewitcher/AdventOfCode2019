@@ -25,6 +25,10 @@ type OpCode =
     | Two of Input * Input * Output
     | Three of Input * Output
     | Four of Output
+    | Five of Input * Input
+    | Six of Input * Input
+    | Seven of Input * Input * Output
+    | Eight of Input * Input * Output
     | NinetyNine
 
 type Status =
@@ -39,7 +43,7 @@ type ProgramState =
       Status: Status }
 
 type IntCodeError =
-    | InvalidParameterMode of string list
+    | InvalidParameterMode of string
     | InvalidParameter of string
     | MissingParameters of string
     | InvalidOpCode of string
