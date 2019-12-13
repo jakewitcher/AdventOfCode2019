@@ -1,4 +1,4 @@
 .ionide
-.vs/IntCodeComputer**
+.vs/**
 bin/**
 obj/**
