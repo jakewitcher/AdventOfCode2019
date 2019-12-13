@@ -3,229 +3,215 @@
 open IntCodeComputer.Types
 open Collections
 
-let rec private pad (length: int) (instruction: int list) =
+let rec private pad length instruction =
     if List.length instruction = length then instruction
     else pad length (0 :: instruction)
 
 let padThree = pad 3
 let padFour = pad 4
 
-let private parseMode (mode: int) =
+let private parseMode mode =
     match mode with
     | 0 -> Ok Position
     | 1 -> Ok Immediate
     | mode -> sprintf "%i is not a valid parameter mode" mode |> Error
 
-let private createInput (mode: int) (input: Parameter) =
-    parseMode mode
-    |> Result.map (fun mode ->
-        { InputParameter = input
-          Mode = mode })
 
-let private createOutput (mode: int) (output: Parameter) =
-    parseMode mode
-    |> Result.map (fun mode ->
-        { OutputParameter = output
-          Mode = mode })
+module Create =
+    let private createInput mode input =
+        parseMode mode
+        |> Result.map (fun mode ->
+            { InputParameter = input
+              Mode = mode })
 
-let private createThreeParamOpCode (ctor: Input * Input * Output -> OpCode) (instruction: int list) (input1: Parameter) (input2: Parameter) (output: Parameter) =
-    let instruction' = padFour instruction
+    let private createOutput mode output =
+        parseMode mode
+        |> Result.map (fun mode ->
+            { OutputParameter = output
+              Mode = mode })
 
-    let input1' = createInput instruction'.[1] input1
-    let input2' = createInput instruction'.[0] input2
-    let output' = createOutput 0 output
+    let private createThreeParameterOpCode ctor rawInstruction rawInput1 rawInput2 rawOutput =
+        let instruction = padFour rawInstruction
 
-    match input1', input2', output' with
-    | Ok in1, Ok in2, Ok out -> ctor (in1, in2, out) |> Ok
-    | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
+        let input1 = createInput instruction.[1] rawInput1
+        let input2 = createInput instruction.[0] rawInput2
+        let output = createOutput 0 rawOutput
 
-let private createTwoParamOpCode (ctor: Input * Input -> OpCode) (instruction: int list) (input1: Parameter) (input2: Parameter) =
-    let instruction' = padFour instruction
+        match input1, input2, output with
+        | Ok in1, Ok in2, Ok out -> ctor (in1, in2, out) |> Ok
+        | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
+
+    let private createTwoParamOpCode ctor rawInstruction rawInput1 rawInput2 =
+        let instruction = padFour rawInstruction
     
-    let input1' = createInput instruction'.[1] input1
-    let input2' = createInput instruction'.[0] input2
+        let input1 = createInput instruction.[1] rawInput1
+        let input2 = createInput instruction.[0] rawInput2
 
-    match input1', input2' with
-    | Ok in1, Ok in2 -> ctor (in1, in2) |> Ok
-    | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
+        match input1, input2 with
+        | Ok in1, Ok in2 -> ctor (in1, in2) |> Ok
+        | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
 
-let createOne = createThreeParamOpCode One
-let createTwo = createThreeParamOpCode Two
+    let private createOne = createThreeParameterOpCode One
+    let private createTwo = createThreeParameterOpCode Two
 
-let createThree (instruction: int list) (input: Parameter) (output: Parameter) =
-    let instruction' = padThree instruction
+    let private createThree rawInstruction rawInput rawOutput =
+        let instruction = padThree rawInstruction
 
-    let input' = createInput instruction'.[0] input
-    let output' = createOutput 0 output
+        let input = createInput instruction.[0] rawInput
+        let output = createOutput 0 rawOutput
 
-    match input', output' with
-    | Ok in1, Ok out -> Three(in1, out) |> Ok
-    | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
+        match input, output with
+        | Ok in1, Ok out -> Three(in1, out) |> Ok
+        | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
 
-let createFour (instruction: int list) (output: Parameter): Result<OpCode, IntCodeError> =
-    let instruction' = padThree instruction
+    let private createFour rawInstruction rawOutput =
+        let instruction = padThree rawInstruction
 
-    let output' = createOutput instruction'.[0] output 
+        let output = createOutput instruction.[0] rawOutput 
 
-    match output' with
-    | Ok out -> Four(out) |> Ok
-    | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
+        match output with
+        | Ok out -> Four(out) |> Ok
+        | _ -> "one or more parameter modes was invalid" |> (Error << InvalidParameterMode)
 
-let createFive = createTwoParamOpCode Five
-let createSix = createTwoParamOpCode Six
-let createSeven = createThreeParamOpCode Seven
-let createEight = createThreeParamOpCode Eight
+    let private createFive = createTwoParamOpCode Five
+    let private createSix = createTwoParamOpCode Six
+    let private createSeven = createThreeParameterOpCode Seven
+    let private createEight = createThreeParameterOpCode Eight
 
-let create (instruction: int list) (state: ProgramState) =
-    let createOpCode opt f =
-        opt
-        |> Option.map f
-        |> Option.defaultValue
-            ("not enough parameters for opcode one"
-                |> MissingParameters
-                |> Error)
+    let opcode instruction state =
+        let createOpCode opt f =
+            opt
+            |> Option.map f
+            |> Option.defaultValue
+                ("not enough parameters for opcode one"
+                    |> MissingParameters
+                    |> Error)
     
-    let createOpCodeSingleParam = createOpCode (Array.tryGet (state.Position + 1) state.Program)
-    let createOpCodeMultiParam length = createOpCode (Array.trySub state.Program (state.Position + 1) length)
-    let twoParam f (param : int []) = f instruction param.[0] param.[1]
-    let threeParam f (param : int []) = f instruction param.[0] param.[1] param.[2]
+        let singleParameter = 
+            createOpCode (Array.tryGet (state.Position + 1) state.Program)
+
+        let multiParameter length = 
+            createOpCode (Array.trySub state.Program (state.Position + 1) length)
+
+        let extractTwoParameters f (param : int []) = 
+            f instruction param.[0] param.[1]
+
+        let extractThreeParameters f (param : int []) = 
+            f instruction param.[0] param.[1] param.[2]
         
-    match List.tryLast instruction with
-    | Some 1 -> createOpCodeMultiParam 3 (threeParam createOne)
-    | Some 2 -> createOpCodeMultiParam 3 (threeParam createTwo)
-    | Some 3 -> createOpCodeSingleParam (fun param -> createThree instruction state.UserInput param)
-    | Some 4 -> createOpCodeSingleParam (fun param -> createFour instruction param)
-    | Some 5 -> createOpCodeMultiParam 2 (twoParam createFive)
-    | Some 6 -> createOpCodeMultiParam 2 (twoParam createSix)
-    | Some 7 -> createOpCodeMultiParam 3 (threeParam createSeven)
-    | Some 8 -> createOpCodeMultiParam 3 (threeParam createEight)
-    | Some 99 -> Ok NinetyNine
-    | Some opcode ->
-        sprintf "%i is not a valid opcode" opcode |> (Error << InvalidOpCode)
-    | None ->
-        "no opcode found" |> (Error << MissingOpCode)
+        match List.tryLast instruction with
+        | Some 1 -> extractThreeParameters createOne |> multiParameter 3
+        | Some 2 -> extractThreeParameters createTwo |> multiParameter 3
+        | Some 3 -> createThree instruction state.UserInput |> singleParameter
+        | Some 4 -> createFour instruction |> singleParameter
+        | Some 5 -> extractTwoParameters createFive |> multiParameter 2
+        | Some 6 -> extractTwoParameters createSix |> multiParameter 2
+        | Some 7 -> extractThreeParameters createSeven |> multiParameter 3
+        | Some 8 -> extractThreeParameters createEight |> multiParameter 3
+        | Some 99 -> Ok NinetyNine
+        | Some opcode -> sprintf "%i is not a valid opcode" opcode |> (Error << InvalidOpCode)
+        | None -> "no opcode found" |> (Error << MissingOpCode)
 
-let processInput (input: Input) (program: Program) =
-    match input.Mode with
-    | Position -> Array.tryGet input.InputParameter program
-    | Immediate -> Some input.InputParameter
 
-let processOutput (output: Output) (program: Program) =
-    match output.Mode with
-    | Position -> Array.tryGet output.OutputParameter program
-    | Immediate -> Some output.OutputParameter
+module Read =
+    let private processInput (input: Input) program =
+        match input.Mode with
+        | Position -> Array.tryGet input.InputParameter program
+        | Immediate -> Some input.InputParameter
 
-let run (opcode: OpCode) (state: ProgramState) =
-    match opcode with
-    | One(in1, in2, out) ->
-        let param1 = processInput in1 state.Program
-        let param2 = processInput in2 state.Program
+    let private processOutput (output: Output) program =
+        match output.Mode with
+        | Position -> Array.tryGet output.OutputParameter program
+        | Immediate -> Some output.OutputParameter
 
-        match param1, param2 with
-        | Some in1', Some in2' ->
+    let private readThreeParameterOpCode f unprocessedInput1 unprocessedInput2 output state =
+        let input1 = processInput unprocessedInput1 state.Program
+        let input2 = processInput unprocessedInput2 state.Program
+
+        match input1, input2 with
+        | Some in1, Some in2 ->
             { state with
                     Position = state.Position + 4
-                    Program = Array.updateAt out.OutputParameter (in1' + in2') state.Program }
+                    Program = Array.updateAt output.OutputParameter (f in1 in2) state.Program }
             |> Ok
         | _, _ ->
             "invalid parameter" |> (Error << InvalidParameter)
 
+    let private readConditionalJumpOpCode f unprocessedInput1 unprocessedOnput2 state =
+        let input1 = processInput unprocessedInput1 state.Program
+        let input2 = processInput unprocessedOnput2 state.Program
 
-    | Two(in1, in2, out) ->
-        let param1 = processInput in1 state.Program
-        let param2 = processInput in2 state.Program
-
-        match param1, param2 with
-        | Some in1', Some in2' ->
+        match input1, input2 with
+        | Some in1, Some in2 ->
             { state with
-                    Position = state.Position + 4
-                    Program = Array.updateAt out.OutputParameter (in1' * in2') state.Program }
+                    Position = if f in1 0 then in2 else state.Position + 3 }
             |> Ok
         | _, _ ->
             "invalid parameter" |> (Error << InvalidParameter)
 
-    | Three(in1, out) ->
+    let private readComparisonOpCode f unprocessedInput1 unprocessedInput2 outputPosition state =
+        let input1 = processInput unprocessedInput1 state.Program
+        let input2 = processInput unprocessedInput2 state.Program
+
+        match input1, input2 with
+        | Some in1, Some in2 ->
+            let output = if f in1 in2 then 1 else 0
+            { state with
+                    Position = state.Position + 4
+                    Program = Array.updateAt outputPosition output state.Program }
+            |> Ok
+        | _, _ ->
+            "invalid parameter" |> (Error << InvalidParameter)
+
+    let private readOne = readThreeParameterOpCode (+)
+    let private readTwo = readThreeParameterOpCode (*)
+
+    let private readThree input output state =
         { state with
-                Position = state.Position + 2
-                Program = Array.updateAt out.OutputParameter in1.InputParameter state.Program }
-        |> Ok
+            Position = state.Position + 2
+            Program = Array.updateAt output.OutputParameter input.InputParameter state.Program } |> Ok
 
-    | Four out ->
-        let output = processOutput out state.Program
+    let private readFour unprocessedOutput state =
+        let output = processOutput unprocessedOutput state.Program
         match output with 
-        | Some output' -> 
+        | Some out -> 
             { state with
                     Position = state.Position + 2
-                    Output = output' :: state.Output } |> Ok
+                    Output = out :: state.Output } |> Ok
         | None -> 
             "invalid parameter" |> (Error << InvalidParameter)
 
-    | Five(in1, in2) ->
-        let param1 = processInput in1 state.Program
-        let param2 = processInput in2 state.Program
+    let private readFive = readConditionalJumpOpCode (<>)
+    let private readSix = readConditionalJumpOpCode (=)
+    let private readSeven = readComparisonOpCode (<)
+    let private readEight = readComparisonOpCode (=)
 
-        match param1, param2 with
-        | Some in1', Some in2' ->
-            { state with
-                    Position = if in1' <> 0 then in2' else state.Position + 3 }
-            |> Ok
-        | _, _ ->
-            "invalid parameter" |> (Error << InvalidParameter)
+    let opcode op state =
+        match op with
+        | One(in1, in2, out) -> readOne in1 in2 out state
+        | Two(in1, in2, out) -> readTwo in1 in2 out state
+        | Three(in1, out) -> readThree in1 out state
+        | Four out -> readFour out state
+        | Five(in1, in2) -> readFive in1 in2 state
+        | Six(in1, in2) -> readSix in1 in2 state
+        | Seven(in1, in2, out) -> readSeven in1 in2 out.OutputParameter state
+        | Eight(in1, in2, out) -> readEight in1 in2 out.OutputParameter state
+        | NinetyNine -> { state with Status = Halt } |> Ok
 
-    | Six(in1, in2) ->
-        let param1 = processInput in1 state.Program
-        let param2 = processInput in2 state.Program
 
-        match param1, param2 with
-        | Some in1', Some in2' ->
-            { state with
-                    Position = if in1' = 0 then in2' else state.Position + 3 }
-            |> Ok
-        | _, _ ->
-            "invalid parameter" |> (Error << InvalidParameter)
+module Run =
+    let rec private segment (instruction: int) (segments: int list) =
+        if instruction <= 0 then segments
+        else segment (instruction / 10) (instruction % 10 :: segments)
 
-    | Seven(in1, in2, out) ->
-        let param1 = processInput in1 state.Program
-        let param2 = processInput in2 state.Program
+    let opcode (state: ProgramState) =
 
-        match param1, param2 with
-        | Some in1', Some in2' ->
-            let output = if in1' < in2' then 1 else 0
-            { state with
-                    Position = state.Position + 4
-                    Program = Array.updateAt out.OutputParameter output state.Program }
-            |> Ok
-        | _, _ ->
-            "invalid parameter" |> (Error << InvalidParameter)
+        let segmented =
+            if state.Program.[state.Position] = 99 then [99] 
+            else segment state.Program.[state.Position] []
 
-    | Eight(in1, in2, out) ->
-        let param1 = processInput in1 state.Program
-        let param2 = processInput in2 state.Program
-
-        match param1, param2 with
-        | Some in1', Some in2' ->
-            let output = if in1' = in2' then 1 else 0
-            { state with
-                    Position = state.Position + 4
-                    Program = Array.updateAt out.OutputParameter output state.Program }
-            |> Ok
-        | _, _ ->
-            "invalid parameter" |> (Error << InvalidParameter)
-
-    | NinetyNine -> { state with Status = Halt } |> Ok
-
-let rec private segment (instruction: int) (segments: int list) =
-    if instruction <= 0 then segments
-    else segment (instruction / 10) (instruction % 10 :: segments)
-
-let read (state: ProgramState) =
-
-    let segmented =
-        if state.Program.[state.Position] = 99 then [99] 
-        else segment state.Program.[state.Position] []
-
-    if (not << List.isEmpty) segmented then
-        create segmented state |> Result.bind (fun opcode -> run opcode state)
-    else
-        sprintf "%i is not a valid opcode" state.Program.[state.Position]
-        |> (Error << InvalidOpCode)
+        if (not << List.isEmpty) segmented then
+            Create.opcode segmented state |> Result.bind (fun opcode -> Read.opcode opcode state)
+        else
+            sprintf "%i is not a valid opcode" state.Program.[state.Position]
+            |> (Error << InvalidOpCode)

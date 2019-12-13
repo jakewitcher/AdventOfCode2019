@@ -9,17 +9,13 @@ let runInputInstruction input =
     |> Computer.parseProgram
     |> Computer.run input
 
-let private writeIntCodeComputerResults method result =
+let writeResultsToConsole result =
     match result with 
-    | Ok state -> sprintf "%A" state.Output |> method
+    | Ok state -> printfn "%A" state.Output
     | Error err -> 
         match err with 
-        | InvalidParameterMode msg -> sprintf "%A" msg |> method
-        | InvalidParameter msg -> msg |> method 
-        | MissingParameters msg -> msg |> method
-        | InvalidOpCode msg -> msg |> method 
-        | MissingOpCode msg -> msg |> method
-
-let writeToConsole = writeIntCodeComputerResults (printfn "%s")
-
-let writeToFile path = writeIntCodeComputerResults (fun result -> File.WriteAllText(path, result))
+        | InvalidParameterMode msg -> printfn "%s" msg
+        | InvalidParameter msg -> printfn "%s" msg 
+        | MissingParameters msg -> printfn "%s" msg
+        | InvalidOpCode msg -> printfn "%s" msg
+        | MissingOpCode msg -> printfn "%s" msg

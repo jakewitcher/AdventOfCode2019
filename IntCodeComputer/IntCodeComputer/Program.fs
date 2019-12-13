@@ -12,7 +12,7 @@ let main argv =
     let input = Console.ReadLine() |> string |> tryParseInt
 
     match input with
-    | Some input' -> runInputInstruction input' |> writeToConsole
+    | Some input' -> runInputInstruction input' |> writeResultsToConsole
     | None -> printf "The Input Instruction provided was not valid"
 
     0 // return an integer exit code
