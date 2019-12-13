@@ -1,4 +1,4 @@
 .ionide
-.vs/**
-bin/**
-obj/**
+.vs/
+bin/
+obj/
