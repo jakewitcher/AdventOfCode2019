@@ -34,7 +34,7 @@ module Orbit =
         |> List.tryHead
 
     let rec findOrbitting orbitsRaw object =
-        let findOrbittingOfOrbits orbit =
+        let findOrbittingOfOrbit orbit =
             match orbit with
             | Object obj -> findOrbitting orbitsRaw obj
             | Orbit(cent, orb) -> Orbit(cent, orb)
@@ -42,7 +42,7 @@ module Orbit =
         let findOrbits orbits =
             match orbits with
             | [] -> object |> Object
-            | orbits' -> (object, orbits' |> List.map findOrbittingOfOrbits) |> Orbit
+            | orbits' -> (object, orbits' |> List.map findOrbittingOfOrbit) |> Orbit
 
         orbitsRaw
         |> List.filter (fun orbit -> fst orbit = object)
