@@ -76,25 +76,27 @@ module Orbit =
         pathTo' [] object orbit |> List.rev
 
     let distance object1 object2 orbit =
-        let lastCommonNode path1 path2 =
+        let lastCommonNode (path1, path2) =
             Set.intersect (Set.ofList path1) (Set.ofList path2)
             |> Set.toList
             |> List.length
-            |> fun distance -> distance - 1
+            |> fun distance -> path1, path2, distance - 1
 
-        let pathFromCommon path common =
-            path
-            |> List.skip common
-            |> Set.ofList
+        let pathFromCommon (path1, path2, common) =
+            let fromCommon path =
+                path
+                |> List.skip common
+                |> Set.ofList
+
+            fromCommon path1, fromCommon path2
 
         (orbit |> pathTo object1, orbit |> pathTo object2)
-        |> fun (path1, path2) ->
-            lastCommonNode path1 path2 |> pathFromCommon path1, lastCommonNode path1 path2 |> pathFromCommon path2
-        |> fun (path1, path2) ->
-            Set.union path1 path2
-            |> Set.toSeq
-            |> Seq.windowed 2
-            |> Seq.length
+        |> lastCommonNode
+        |> pathFromCommon
+        ||> Set.union
+        |> Set.toSeq
+        |> Seq.windowed 2
+        |> Seq.length
 
 
 Orbit.parseAll
