@@ -4,7 +4,7 @@ type Object = string
 
 type Orbit =
     | Object of Object
-    | Orbit of Object * Orbit list
+    | Center of Object * Orbit list
 
 module List =
     let tryHead list =
@@ -33,33 +33,33 @@ module Orbit =
         |> Set.toList
         |> List.tryHead
 
-    let rec findOrbitting orbitsRaw object =
-        let findOrbittingOfOrbit orbit =
-            match orbit with
-            | Object obj -> findOrbitting orbitsRaw obj
-            | Orbit(cent, orb) -> Orbit(cent, orb)
+    let rec buildOrbitTree orbitPairs object =
+        let orbitsOfOrbittingObjects object =
+            match object with
+            | Object obj -> buildOrbitTree orbitPairs obj
+            | Center(_, _) -> object
 
-        let findOrbits orbits =
+        let buildOrbits object orbits =
             match orbits with
             | [] -> object |> Object
-            | orbits' -> (object, orbits' |> List.map findOrbittingOfOrbit) |> Orbit
+            | orbits' -> (object, orbits' |> List.map orbitsOfOrbittingObjects) |> Center
 
-        orbitsRaw
+        orbitPairs
         |> List.filter (fun orbit -> fst orbit = object)
         |> List.map (snd >> Object)
-        |> findOrbits
+        |> buildOrbits object
 
     let findAll orbits =
         orbits
         |> findCenter
-        |> Option.map (Ok << findOrbitting orbits)
+        |> Option.map (Ok << buildOrbitTree orbits)
         |> Option.defaultValue ("no orbits Found" |> Error)
 
     let length orbit =
         let rec length' total orbit =
             match orbit with
             | Object _ -> total
-            | Orbit(_, orbits) -> total + List.sumBy (length' (total + 1)) orbits
+            | Center(_, orbits) -> total + List.sumBy (length' (total + 1)) orbits
 
         length' 0 orbit
 
@@ -69,7 +69,7 @@ module Orbit =
             | Object obj ->
                 if obj = object then obj :: path
                 else []
-            | Orbit(center, orbits) ->
+            | Center(center, orbits) ->
                 if center = object then center :: path
                 else orbits |> List.collect (pathTo' (center :: path) object)
 
