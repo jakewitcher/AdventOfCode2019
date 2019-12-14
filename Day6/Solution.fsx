@@ -91,8 +91,7 @@ module Orbit =
             fromCommon path1, fromCommon path2
 
         (orbit |> pathTo object1, orbit |> pathTo object2)
-        |> lastCommonNode
-        |> pathFromCommon
+        |> (lastCommonNode >> pathFromCommon)
         ||> Set.union
         |> Set.toSeq
         |> Seq.windowed 2
