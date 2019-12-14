@@ -52,8 +52,8 @@ module Orbit =
     let findAll orbits =
         orbits
         |> findCenter
-        |> Option.map (findOrbitting orbits)
-        |> Option.defaultValue ("no orbits Found" |> Object)
+        |> Option.map (Ok << findOrbitting orbits)
+        |> Option.defaultValue ("no orbits Found" |> Error)
 
     let length orbit =
         let rec length' total orbit =
@@ -100,8 +100,8 @@ module Orbit =
 
 Orbit.parseAll
 |> Orbit.findAll
-|> Orbit.length
+|> Result.map Orbit.length
 
 Orbit.parseAll
 |> Orbit.findAll
-|> Orbit.distance "SAN" "YOU"
+|> Result.map (Orbit.distance "SAN" "YOU")
